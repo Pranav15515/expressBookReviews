@@ -1,4 +1,5 @@
 const express = require('express');
+const axios = require('axios');
 const books = require('./booksdb.js');
 const { isValid, users } = require('./auth_users.js');
 
@@ -17,7 +18,9 @@ public_users.post('/register', (req, res) => {
   }
 
   users.push({ username, password });
-  return res.status(201).json({ message: 'User registered successfully' });
+  return res.status(201).json({
+  message: 'User successfully registered. Now you can login'
+});
 });
 
 // Get all books
@@ -36,16 +39,43 @@ public_users.get('/isbn/:isbn', (req, res) => {
   return res.status(200).json(book);
 });
 
-// Get books by author
-public_users.get('/author/:author', (req, res) => {
-  const author = req.params.author.toLowerCase();
-  const result = Object.entries(books)
-    .filter(([, book]) => book.author.toLowerCase() === author)
-    .map(([isbn, book]) => ({ isbn, ...book }));
+// Get books by author using Axios and async/await
+public_users.get('/author/:author', async (req, res) => {
+  try {
+    const author = req.params.author.trim().toLowerCase();
 
-  return res.status(200).json(result);
+    if (!author) {
+      return res.status(400).json({
+        message: 'Author name is required'
+      });
+    }
+
+    // Fetch the existing local book catalogue through the API
+    const response = await axios.get('http://localhost:5000/');
+    const allBooks = response.data;
+
+    const result = Object.entries(allBooks)
+      .filter(([, book]) =>
+        book.author &&
+        book.author.toLowerCase() === author
+      )
+      .map(([isbn, book]) => ({ isbn, ...book }));
+
+    if (result.length === 0) {
+      return res.status(404).json({
+        message: 'No books found for this author'
+      });
+    }
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('Error fetching books by author:', error.message);
+
+    return res.status(500).json({
+      message: 'Unable to fetch books by author'
+    });
+  }
 });
-
 // Get books by title
 public_users.get('/title/:title', (req, res) => {
   const title = req.params.title.toLowerCase();
